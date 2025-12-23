@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { CampaignConfig } from '../types';
-import { ApiService } from '../services/apiService';
+import { CampaignConfig } from '../types.ts';
+import { ApiService } from '../services/apiService.ts';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {

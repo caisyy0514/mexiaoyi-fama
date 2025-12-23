@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { ViewMode, CampaignConfig, CloudStatus } from './types';
-import { ApiService } from './services/apiService';
-import AdminDashboard from './components/AdminDashboard';
-import UserPortal from './components/UserPortal';
+import { ViewMode, CampaignConfig, CloudStatus } from './types.ts';
+import { ApiService } from './services/apiService.ts';
+import AdminDashboard from './components/AdminDashboard.tsx';
+import UserPortal from './components/UserPortal.tsx';
 
 const ADMIN_TOKEN = 'admin4624199';
 
@@ -102,7 +102,7 @@ const App: React.FC = () => {
       
       <footer className="py-8 text-center text-gray-300">
         <div className="text-[10px] font-black uppercase tracking-[0.4em]">
-          Secure Distribution Protocol v3.2.2 (Stability Fix)
+          Secure Distribution Protocol v3.2.3 (No-Build Standalone Fix)
         </div>
       </footer>
     </div>

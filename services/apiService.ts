@@ -1,5 +1,5 @@
 
-import { CampaignConfig } from '../types';
+import { CampaignConfig } from '../types.ts';
 
 const API_BASE = '/api'; 
 

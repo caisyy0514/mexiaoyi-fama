@@ -13,13 +13,19 @@
         background-color: #f8fafc;
       }
     </style>
+    <!-- Babel Standalone for in-browser JSX/TSX transpilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
-      // 非破坏性地初始化 process 对象，确保不覆盖云端注入的 API_KEY
       window.process = window.process || { env: {} };
       window.process.env = window.process.env || {};
       if (typeof window.process.env.API_KEY === 'undefined') {
         window.process.env.API_KEY = "";
       }
+      
+      // 配置 Babel 支持 TypeScript
+      Babel.registerPreset('env', {
+        targets: { browsers: ['last 2 versions'] }
+      });
     </script>
     <script type="importmap">
     {
@@ -37,6 +43,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <!-- 使用 type="text/babel" 并启用 typescript 预设 -->
+    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
   </body>
 </html>
