@@ -12,12 +12,12 @@ export const ApiService = {
         return await res.json();
       }
     } catch (e) {
-      console.error("Cloud config sync skipped");
+      console.error("Config fetch error:", e);
     }
     return null;
   },
 
-  // 保存配置到云端
+  // 保存配置
   async saveConfig(config: CampaignConfig): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/config`, {
@@ -31,7 +31,7 @@ export const ApiService = {
     }
   },
 
-  // 云端领取逻辑
+  // 领取逻辑
   async claimCode(userId: string): Promise<{ code: string } | { error: string }> {
     try {
       const res = await fetch(`${API_BASE}/claim`, {
@@ -62,16 +62,16 @@ export const ApiService = {
     }
   },
 
-  // 获取统计信息
-  async fetchStats(): Promise<{ total: number; claimed: number }> {
+  // 获取统计信息（包含 cloud 标志）
+  async fetchStats(): Promise<{ total: number; claimed: number; cloud: boolean } | null> {
     try {
       const res = await fetch(`${API_BASE}/stats`);
       if (res.ok) return await res.json();
     } catch (e) {}
-    return { total: 0, claimed: 0 };
+    return null;
   },
 
-  // 重置云端数据库
+  // 重置
   async resetCloud(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/reset`, { method: 'POST' });

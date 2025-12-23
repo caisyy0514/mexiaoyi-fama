@@ -11,39 +11,58 @@
       body {
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc;
+        margin: 0;
+      }
+      #root:empty::before {
+        content: '正在启动核心引擎...';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        color: #94a3b8;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
       }
     </style>
-    <!-- Babel Standalone for in-browser JSX/TSX transpilation -->
+    <!-- Babel Standalone -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
-      window.process = window.process || { env: {} };
-      window.process.env = window.process.env || {};
-      if (typeof window.process.env.API_KEY === 'undefined') {
-        window.process.env.API_KEY = "";
-      }
+      // 捕获全局错误便于调试
+      window.onerror = function(msg, url, line, col, error) {
+        console.error("Runtime Error: ", msg, "\nAt: ", url, ":", line);
+        return false;
+      };
+
+      window.process = { env: { API_KEY: "" } };
       
-      // 配置 Babel 支持 TypeScript
       Babel.registerPreset('env', {
-        targets: { browsers: ['last 2 versions'] }
+        targets: { browsers: ['last 2 versions', 'not dead'] }
       });
     </script>
     <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@19.0.0",
-        "react/": "https://esm.sh/react@19.0.0/",
-        "react-dom": "https://esm.sh/react-dom@19.0.0",
-        "react-dom/": "https://esm.sh/react-dom@19.0.0/",
-        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-        "@google/genai": "https://esm.sh/@google/genai@1.34.0",
-        "xlsx": "https://esm.sh/xlsx@0.18.5"
-      }
-    }
-    </script>
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@google/genai": "https://esm.sh/@google/genai@1.34.0",
+    "xlsx": "https://esm.sh/xlsx@0.18.5",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
   </head>
   <body>
     <div id="root"></div>
-    <!-- 使用 type="text/babel" 并启用 typescript 预设 -->
-    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
+    <!-- 显式设置 data-type="module" 配合 Babel 处理 TSX -->
+    <script 
+      type="text/babel" 
+      data-presets="react,typescript" 
+      data-type="module" 
+      src="./index.tsx">
+    </script>
   </body>
 </html>

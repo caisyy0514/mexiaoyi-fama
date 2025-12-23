@@ -22,14 +22,20 @@ const App: React.FC = () => {
     try {
       setCloudStatus(prev => ({ ...prev, syncing: true }));
       const remoteConfig = await ApiService.fetchConfig();
+      const stats = await ApiService.fetchStats();
+      
       if (remoteConfig) {
         setConfig(remoteConfig);
-        setCloudStatus({ connected: true, syncing: false });
-      } else {
-        setCloudStatus({ connected: false, syncing: false, error: "云端连接中..." });
       }
+      
+      // 根据后端返回的 stats.cloud 判定连接模式
+      setCloudStatus({ 
+        connected: !!stats, 
+        syncing: false, 
+        error: (stats && !stats.cloud) ? "运行于本地内存模式 (Redis 未连接)" : undefined 
+      });
     } catch (err) {
-      setCloudStatus({ connected: false, syncing: false, error: "系统初始化失败" });
+      setCloudStatus({ connected: false, syncing: false, error: "无法同步云端数据" });
     }
   };
 
@@ -55,14 +61,14 @@ const App: React.FC = () => {
   };
 
   const handleReset = async () => {
-    if (confirm("警告：此操作将清空【云端数据库】中所有会员码和领取记录，确认吗？")) {
+    if (confirm("警告：此操作将清空【数据库】中所有会员码和领取记录，确认吗？")) {
       const success = await ApiService.resetCloud();
       if (success) {
-        alert("云端库已重置");
+        alert("系统已重置");
         location.hash = '#/';
         location.reload();
       } else {
-        alert("重置失败，请检查后端运行状态");
+        alert("重置失败，请检查后端状态");
       }
     }
   };
@@ -72,17 +78,17 @@ const App: React.FC = () => {
       <div className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-center transition-all duration-700 ${
         cloudStatus.syncing 
           ? 'bg-blue-600 text-white' 
-          : cloudStatus.connected 
-            ? 'bg-gray-900 text-gray-400' 
-            : 'bg-amber-500 text-white'
+          : cloudStatus.error 
+            ? 'bg-amber-500 text-white'
+            : 'bg-gray-900 text-gray-400'
       }`}>
         <div className="flex items-center justify-center gap-2">
           {cloudStatus.syncing && <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>}
           {cloudStatus.syncing 
-            ? 'Synchronizing with Cloud Engine...' 
-            : cloudStatus.connected 
-              ? 'Real-time Cloud Database Connected' 
-              : (cloudStatus.error || 'Database Sync Offline')}
+            ? 'Synchronizing with Engine...' 
+            : cloudStatus.error 
+              ? cloudStatus.error
+              : 'Protocol Secure & Data Cloud-Synced'}
         </div>
       </div>
 
@@ -102,7 +108,7 @@ const App: React.FC = () => {
       
       <footer className="py-8 text-center text-gray-300">
         <div className="text-[10px] font-black uppercase tracking-[0.4em]">
-          Secure Distribution Protocol v3.2.3 (No-Build Standalone Fix)
+          Secure Distribution Protocol v3.3.0 (Cloud-Resilient Edition)
         </div>
       </footer>
     </div>
