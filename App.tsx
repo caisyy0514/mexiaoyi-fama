@@ -11,15 +11,14 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.USER);
   const [config, setConfig] = useState<CampaignConfig>({
     name: '会员权益分发中心',
-    description: '欢迎使用自助领取系统，正在同步最新的活动配置...',
+    description: '欢迎使用自助领取系统，正在同步云端数据...',
     instructions: '1. 请确保您的网络连接正常。\n2. 输入正确的用户标识。\n3. 点击领取并复制兑换码。',
     qrCode: '' 
   });
   
-  // 默认假设是在线状态，提升用户首屏感知
-  const [cloudStatus, setCloudStatus] = useState<CloudStatus>({ connected: true, syncing: true });
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>({ connected: false, syncing: true });
 
-  const syncFromCloud = async () => {
+  const syncFromCloud = async (retryCount = 0) => {
     try {
       setCloudStatus(prev => ({ ...prev, syncing: true }));
       const [remoteConfig, stats] = await Promise.all([
@@ -32,13 +31,20 @@ const App: React.FC = () => {
       }
       
       const isCloud = stats && stats.cloud;
+      
+      // 如果后端还在尝试连接 Redis (isCloud 为 false 但 stats 存在)，过 2 秒重试一次
+      if (!isCloud && retryCount < 2) {
+        setTimeout(() => syncFromCloud(retryCount + 1), 2000);
+        return;
+      }
+
       setCloudStatus({ 
         connected: !!stats, 
         syncing: false, 
-        error: !isCloud ? "Running in Offline Mode (Redis not detected)" : undefined 
+        error: !isCloud ? "Offline Mode (Redis Not Connected)" : undefined 
       });
     } catch (err) {
-      setCloudStatus({ connected: false, syncing: false, error: "Cloud sync failed. Service may be unstable." });
+      setCloudStatus({ connected: false, syncing: false, error: "Sync connection lost" });
     }
   };
 
@@ -64,10 +70,10 @@ const App: React.FC = () => {
   };
 
   const handleReset = async () => {
-    if (confirm("警告：此操作将清空云端所有数据。确认吗？")) {
+    if (confirm("警告：此操作将永久清空云端所有配置和会员码！确认重置吗？")) {
       const success = await ApiService.resetCloud();
       if (success) {
-        alert("云端已重置");
+        alert("云端已成功重置");
         location.hash = '#/';
         location.reload();
       }
@@ -76,31 +82,28 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f0f2f5] selection:bg-blue-100">
-      {/* 顶部状态条：在线/离线反馈 */}
-      <div className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-center transition-all duration-1000 ${
+      {/* 顶部状态条：更加敏感的在线反馈 */}
+      <div className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-center transition-all duration-700 ${
         cloudStatus.syncing 
-          ? 'bg-blue-600 text-white' 
+          ? 'bg-blue-500 text-white' 
           : cloudStatus.error 
-            ? 'bg-amber-500 text-white shadow-inner'
-            : 'bg-emerald-600 text-white shadow-lg'
+            ? 'bg-amber-500 text-white'
+            : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/10'
       }`}>
         <div className="flex items-center justify-center gap-2">
           {cloudStatus.syncing ? (
             <span className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce"></span>
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce [animation-delay:0.2s]"></span>
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce [animation-delay:0.4s]"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse [animation-delay:0.2s]"></span>
             </span>
           ) : !cloudStatus.error ? (
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
+            <div className="w-2 h-2 bg-emerald-200 rounded-full animate-ping absolute ml-[-20px]"></div>
           ) : null}
           {cloudStatus.syncing 
-            ? 'Establishing Secure Connection...' 
+            ? 'Synchronizing with Cloud Edge...' 
             : cloudStatus.error 
               ? cloudStatus.error
-              : 'Global Distribution Protocol Active'}
+              : 'Global Distribution Protocol: ONLINE'}
         </div>
       </div>
 
@@ -119,8 +122,8 @@ const App: React.FC = () => {
       </main>
       
       <footer className="py-12 text-center text-gray-400">
-        <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40 hover:opacity-100 transition-opacity">
-          &copy; 2024 Membership Engine • Cloud Native Distribution
+        <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40">
+          &copy; 2024 Membership Engine • Cloud Verified
         </div>
       </footer>
     </div>

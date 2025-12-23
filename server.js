@@ -30,16 +30,37 @@ app.get(/\.(tsx|ts)$/, (req, res, next) => {
   next();
 });
 
-// --- 增强型 Redis 连接逻辑 ---
-// 自动适配多种云环境的变量名
-const redisConfig = {
-  url: process.env.REDIS_URL || (process.env.REDISHOST ? `redis://${process.env.REDISHOST}:${process.env.REDISPORT || 6379}` : null) || 'redis://localhost:6379',
-  maxRetries: 2
+// --- Zeabur 深度优化版 Redis 连接逻辑 ---
+const getRedisConfig = () => {
+  // 1. 优先尝试标准的 REDIS_URL
+  if (process.env.REDIS_URL) {
+    console.log('[Redis] Detected REDIS_URL from environment.');
+    return process.env.REDIS_URL;
+  }
+  
+  // 2. 适配 Zeabur 自动注入的变量 (HOST, PORT, PASSWORD)
+  if (process.env.REDISHOST) {
+    const host = process.env.REDISHOST;
+    const port = process.env.REDISPORT || 6379;
+    const password = process.env.REDISPASSWORD;
+    
+    console.log(`[Redis] Detected Zeabur Variables: ${host}:${port} (Password: ${password ? 'YES' : 'NO'})`);
+    
+    // 构建标准的 Redis 连接协议
+    if (password) {
+      return `redis://:${password}@${host}:${port}`;
+    }
+    return `redis://${host}:${port}`;
+  }
+
+  // 3. 本地开发降级
+  return 'redis://127.0.0.1:6379';
 };
 
 let redis;
 let isRedisReady = false;
 
+// 模拟内存存储（降级方案）
 const memoryStore = {
   config: null,
   codes: new Set(),
@@ -47,34 +68,33 @@ const memoryStore = {
 };
 
 const connectRedis = () => {
+  const connectionString = getRedisConfig();
+  
   try {
-    redis = new Redis(redisConfig.url, {
-      maxRetriesPerRequest: 1,
+    redis = new Redis(connectionString, {
+      maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
-        if (times > redisConfig.maxRetries) {
-          console.log(`[Redis] Connection timed out after ${times} attempts. Priority: Memory Mode.`);
-          return null; 
+        const delay = Math.min(times * 1000, 5000);
+        if (times > 5) {
+          console.log('[Redis] Max retries reached. Switching to Local Memory Mode.');
+          return null; // 停止重试
         }
-        return 2000;
+        return delay;
       },
-      reconnectOnError: () => false
-    });
-
-    redis.on('error', (err) => {
-      if (err.code === 'ECONNREFUSED') {
-        console.log(`[Redis] Standby: Could not connect to ${redisConfig.url}. Operational in Local Mode.`);
-      } else {
-        console.error('[Redis] System Error:', err.message || err);
-      }
-      isRedisReady = false;
+      connectTimeout: 10000, // 10秒超时
     });
 
     redis.on('connect', () => {
-      console.log(`[Redis] Cloud Engine Activated: Connected to ${redisConfig.url.split('@').pop()}`);
+      console.log('🚀 [Redis] Cloud Database Connected Successfully!');
       isRedisReady = true;
     });
+
+    redis.on('error', (err) => {
+      console.error('⚠️ [Redis] Connection Issue:', err.message);
+      isRedisReady = false;
+    });
   } catch (e) {
-    console.log('[Redis] Driver initialization failed. Using In-memory persistence.');
+    console.error('❌ [Redis] Failed to initialize driver:', e.message);
   }
 };
 
@@ -102,10 +122,12 @@ app.post('/api/config', async (req, res) => {
 
 app.post('/api/codes/upload', async (req, res) => {
   const { codes } = req.body;
+  if (!codes || !Array.isArray(codes)) return res.status(400).json({ error: 'Invalid codes' });
+  
   try {
     if (isRedisReady) {
-      // 批量写入，优化性能
       const pipeline = redis.pipeline();
+      // 使用 sadd 批量添加
       pipeline.sadd('m_portal:codes:available', ...codes);
       await pipeline.exec();
     } else {
@@ -117,6 +139,8 @@ app.post('/api/codes/upload', async (req, res) => {
 
 app.post('/api/claim', async (req, res) => {
   const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'UserID required' });
+
   try {
     let existing = isRedisReady ? await redis.hget('m_portal:claims', userId) : memoryStore.claims.get(userId);
     if (existing) return res.json({ code: existing });
@@ -133,7 +157,8 @@ app.post('/api/claim', async (req, res) => {
         memoryStore.claims.set(userId, code);
       }
     }
-    if (!code) return res.status(404).json({ error: '权益已领罄' });
+    
+    if (!code) return res.status(404).json({ error: '库存已告罄' });
     res.json({ code });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -163,6 +188,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`\n✅ SERVICE ONLINE: http://localhost:${port}`);
-  console.log(`📡 CLOUD_MODE: ${isRedisReady ? 'ACTIVE' : 'READY (Local Persistence)'}\n`);
+  console.log(`\n✅ SYSTEM READY: http://localhost:${port}`);
+  console.log(`🌍 ENVIRONMENT: ${process.env.NODE_ENV || 'production'}`);
+  console.log(`💡 NOTE: If you are using Zeabur, Redis status will appear in logs above.\n`);
 });
