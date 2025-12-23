@@ -14,8 +14,12 @@
       }
     </style>
     <script>
-      // 解决浏览器环境缺失 process 对象导致的 ReferenceError
-      window.process = { env: { API_KEY: "" } };
+      // 非破坏性地初始化 process 对象，确保不覆盖云端注入的 API_KEY
+      window.process = window.process || { env: {} };
+      window.process.env = window.process.env || {};
+      if (typeof window.process.env.API_KEY === 'undefined') {
+        window.process.env.API_KEY = "";
+      }
     </script>
     <script type="importmap">
     {
@@ -32,7 +36,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- 显式加载入口模块 -->
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>

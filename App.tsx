@@ -7,6 +7,7 @@ import UserPortal from './components/UserPortal';
 const STORAGE_KEY_CODES = 'membercode_codes';
 const STORAGE_KEY_CLAIMS = 'membercode_claims';
 const STORAGE_KEY_CONFIG = 'membercode_config';
+const ADMIN_TOKEN = 'admin4624199';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.USER);
@@ -19,23 +20,35 @@ const App: React.FC = () => {
     qrCode: '' 
   });
 
-  // 处理路由 (基于 Hash)
+  // 增强的路由匹配逻辑
   useEffect(() => {
-    const handleHashChange = () => {
+    const checkRoute = () => {
       const hash = window.location.hash;
-      if (hash === '#/admin4624199') {
+      const path = window.location.pathname;
+      
+      // 检查 Hash 模式: #/admin4624199
+      const isHashMatch = hash === `#/${ADMIN_TOKEN}` || hash === `#${ADMIN_TOKEN}`;
+      // 检查 Path 模式: /admin4624199
+      const isPathMatch = path.endsWith(`/${ADMIN_TOKEN}`);
+
+      if (isHashMatch || isPathMatch) {
         setView(ViewMode.ADMIN);
       } else {
         setView(ViewMode.USER);
       }
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); 
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', checkRoute);
+    window.addEventListener('popstate', checkRoute);
+    checkRoute(); // 初始化执行
+
+    return () => {
+      window.removeEventListener('hashchange', checkRoute);
+      window.removeEventListener('popstate', checkRoute);
+    };
   }, []);
 
-  // 持久化逻辑 - 增加错误捕获
+  // 持久化逻辑
   useEffect(() => {
     try {
       const savedCodes = localStorage.getItem(STORAGE_KEY_CODES);
@@ -46,9 +59,7 @@ const App: React.FC = () => {
       if (savedClaims) setClaims(JSON.parse(savedClaims));
       if (savedConfig) setConfig(JSON.parse(savedConfig));
     } catch (e) {
-      console.error("Failed to load state from localStorage:", e);
-      // 如果解析失败，清除损坏的数据
-      localStorage.clear();
+      console.error("Failed to load state:", e);
     }
   }, []);
 
@@ -58,14 +69,14 @@ const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY_CLAIMS, JSON.stringify(claims));
       localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
     } catch (e) {
-      console.warn("Storage quota exceeded or failed to save.");
+      console.warn("Storage quota limit reached.");
     }
   }, [codes, claims, config]);
 
   const addCodes = (rawCodes: string[]) => {
     const limit = 15000;
     if (codes.length + rawCodes.length > limit) {
-      alert(`超出限制！系统最多支持存储 ${limit} 个会员码。`);
+      alert(`超出限制！`);
       return;
     }
 
@@ -76,7 +87,7 @@ const App: React.FC = () => {
     })).filter(c => c.code.length > 0);
     
     setCodes(prev => [...prev, ...newCodes]);
-    alert(`成功导入 ${newCodes.length} 个新会员码。`);
+    alert(`成功导入 ${newCodes.length} 条记录。`);
   };
 
   const handleClaim = (userId: string): string | null => {
@@ -108,7 +119,7 @@ const App: React.FC = () => {
   };
 
   const resetAll = () => {
-    if (window.confirm("确定要彻底重置吗？这将删除所有会员码和领取记录且无法恢复。")) {
+    if (window.confirm("确定要清空所有数据吗？")) {
       setCodes([]);
       setClaims([]);
       localStorage.removeItem(STORAGE_KEY_CODES);
@@ -137,7 +148,7 @@ const App: React.FC = () => {
         )}
       </main>
       <footer className="py-6 text-center text-gray-400 text-xs">
-        &copy; {new Date().getFullYear()} 会员码管理系统 | {view === ViewMode.ADMIN ? '管理中心' : '领取中心'}
+        &copy; {new Date().getFullYear()} 会员码管理系统 | {view === ViewMode.ADMIN ? '🔐 安全控制台' : '会员服务中心'}
       </footer>
     </div>
   );

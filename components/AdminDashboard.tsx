@@ -1,7 +1,6 @@
 
 import React, { useState, useRef } from 'react';
 import { MembershipCode, ClaimRecord, CampaignConfig } from '../types';
-import { generateCampaignAIAssistance } from '../services/geminiService';
 
 interface AdminDashboardProps {
   codes: MembershipCode[];
@@ -21,7 +20,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onReset 
 }) => {
   const [rawInput, setRawInput] = useState('');
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTextSubmit = (e: React.FormEvent) => {
@@ -40,7 +38,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      // 简单 CSV/文本解析：按行分割
       const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
       onAddCodes(lines);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -48,21 +45,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     reader.readAsText(file);
   };
 
+  // 压缩并处理图片
   const handleQRUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setConfig({ ...config, qrCode: base64 });
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 400; // 统一限制为 400px
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85); // 压缩并转为 JPEG
+          setConfig({ ...config, qrCode: compressedBase64 });
+        }
+      };
+      img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
 
   const exportClaims = () => {
     if (claims.length === 0) return alert("暂无数据可导出");
-    
     const headers = "用户标识,会员码,领取时间\n";
     const csvContent = claims.map(c => `${c.userId},${c.code},${new Date(c.timestamp).toLocaleString()}`).join("\n");
     const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -99,7 +123,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* 左侧：统计与配置 */}
         <div className="space-y-6">
           <section className="bg-white p-6 rounded-2xl border shadow-sm">
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -151,7 +174,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <img src={config.qrCode} className="w-12 h-12 rounded border p-1 object-contain" alt="Preview" />
                 )}
                 <label className="flex-grow cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-2 text-center text-xs text-gray-500 hover:bg-gray-100">
-                  <span>点击上传图片</span>
+                  <span>点击上传并自动优化体积</span>
                   <input type="file" accept="image/*" onChange={handleQRUpload} className="hidden" />
                 </label>
               </div>
@@ -159,7 +182,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </section>
         </div>
 
-        {/* 右侧：数据导入与列表 */}
         <div className="lg:col-span-2 space-y-6">
           <section className="bg-white p-6 rounded-2xl border shadow-sm">
             <h2 className="text-lg font-bold mb-4">批量导入会员码 (限15,000条)</h2>
@@ -193,7 +215,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </section>
 
           <section className="bg-white p-6 rounded-2xl border shadow-sm overflow-hidden">
-            <h2 className="text-lg font-bold mb-4">领取历史 (仅展示最近100条)</h2>
+            <h2 className="text-lg font-bold mb-4">领取历史 (最近100条)</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
