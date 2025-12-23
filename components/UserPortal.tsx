@@ -128,11 +128,12 @@ const UserPortal: React.FC<UserPortalProps> = ({ config, onClaim, claims }) => {
             {config.instructions}
           </div>
           <div className="flex flex-col items-center pt-6 border-t border-gray-50">
-            <div className="p-4 bg-white rounded-3xl shadow-xl border-4 border-indigo-50 overflow-hidden">
+            <div className="p-2 bg-white rounded-3xl shadow-xl border-4 border-gray-50 overflow-hidden">
               <img 
                 src={config.qrCode || "https://placehold.co/400?text=未设置二维码"} 
                 alt="二维码"
-                className="w-48 h-48 md:w-56 md:h-56 object-contain"
+                className="w-48 h-48 md:w-64 md:h-64 object-contain bg-white"
+                loading="lazy"
               />
             </div>
             <p className="mt-4 text-[10px] text-gray-300 font-black uppercase tracking-widest">长按识别二维码或保存图片</p>

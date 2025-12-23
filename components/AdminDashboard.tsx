@@ -45,7 +45,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     reader.readAsText(file);
   };
 
-  // 压缩并处理图片
   const handleQRUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -55,7 +54,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 400; // 统一限制为 400px
+        const MAX_SIZE = 600; // 稍微调大一点点保证清晰度
         let width = img.width;
         let height = img.height;
 
@@ -75,8 +74,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          // 重要修复：填充白色背景，防止透明 PNG 变黑
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85); // 压缩并转为 JPEG
+          
+          // 使用 0.9 质量的 JPEG，体积小且兼容性好
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.9);
           setConfig({ ...config, qrCode: compressedBase64 });
         }
       };
@@ -87,7 +91,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const exportClaims = () => {
     if (claims.length === 0) return alert("暂无数据可导出");
-    const headers = "用户标识,会员码,领取时间\n";
+    const headers = "\ufeff用户标识,会员码,领取时间\n"; // 添加 BOM 解决 Excel 中文乱码
     const csvContent = claims.map(c => `${c.userId},${c.code},${new Date(c.timestamp).toLocaleString()}`).join("\n");
     const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -171,10 +175,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <label className="block text-xs font-semibold text-gray-500 mb-1">自定义二维码图片</label>
               <div className="flex items-center gap-4 mt-2">
                 {config.qrCode && (
-                  <img src={config.qrCode} className="w-12 h-12 rounded border p-1 object-contain" alt="Preview" />
+                  <img src={config.qrCode} className="w-12 h-12 rounded border p-1 object-contain bg-white" alt="Preview" />
                 )}
                 <label className="flex-grow cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-2 text-center text-xs text-gray-500 hover:bg-gray-100">
-                  <span>点击上传并自动优化体积</span>
+                  <span>点击上传 (已自动纠正透明背景)</span>
                   <input type="file" accept="image/*" onChange={handleQRUpload} className="hidden" />
                 </label>
               </div>
