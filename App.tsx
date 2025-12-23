@@ -19,13 +19,17 @@ const App: React.FC = () => {
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>({ connected: true, syncing: true });
 
   const syncFromCloud = async () => {
-    setCloudStatus(prev => ({ ...prev, syncing: true }));
-    const remoteConfig = await ApiService.fetchConfig();
-    if (remoteConfig) {
-      setConfig(remoteConfig);
-      setCloudStatus({ connected: true, syncing: false });
-    } else {
-      setCloudStatus({ connected: false, syncing: false, error: "云端连接失败" });
+    try {
+      setCloudStatus(prev => ({ ...prev, syncing: true }));
+      const remoteConfig = await ApiService.fetchConfig();
+      if (remoteConfig) {
+        setConfig(remoteConfig);
+        setCloudStatus({ connected: true, syncing: false });
+      } else {
+        setCloudStatus({ connected: false, syncing: false, error: "云端连接中..." });
+      }
+    } catch (err) {
+      setCloudStatus({ connected: false, syncing: false, error: "系统初始化失败" });
     }
   };
 
@@ -58,7 +62,7 @@ const App: React.FC = () => {
         location.hash = '#/';
         location.reload();
       } else {
-        alert("重置失败，请检查网络或 Redis 连接");
+        alert("重置失败，请检查后端运行状态");
       }
     }
   };
@@ -70,7 +74,7 @@ const App: React.FC = () => {
           ? 'bg-blue-600 text-white' 
           : cloudStatus.connected 
             ? 'bg-gray-900 text-gray-400' 
-            : 'bg-red-500 text-white'
+            : 'bg-amber-500 text-white'
       }`}>
         <div className="flex items-center justify-center gap-2">
           {cloudStatus.syncing && <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>}
@@ -78,7 +82,7 @@ const App: React.FC = () => {
             ? 'Synchronizing with Cloud Engine...' 
             : cloudStatus.connected 
               ? 'Real-time Cloud Database Connected' 
-              : 'Database Connection Error'}
+              : (cloudStatus.error || 'Database Sync Offline')}
         </div>
       </div>
 
@@ -98,7 +102,7 @@ const App: React.FC = () => {
       
       <footer className="py-8 text-center text-gray-300">
         <div className="text-[10px] font-black uppercase tracking-[0.4em]">
-          Secure Distribution Protocol v3.2 (Full-Stack)
+          Secure Distribution Protocol v3.2.2 (Stability Fix)
         </div>
       </footer>
     </div>

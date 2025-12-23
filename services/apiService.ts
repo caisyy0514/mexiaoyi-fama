@@ -12,7 +12,7 @@ export const ApiService = {
         return await res.json();
       }
     } catch (e) {
-      console.error("Failed to fetch config from server");
+      console.error("Cloud config sync skipped");
     }
     return null;
   },
@@ -41,9 +41,9 @@ export const ApiService = {
       });
       const data = await res.json();
       if (res.ok) return data;
-      return { error: data.error || "领取请求被服务器拒绝" };
+      return { error: data.error || "领取请求被拒绝" };
     } catch (e) {
-      return { error: "无法连接到云端核销服务器，请稍后再试" };
+      return { error: "无法连接核销服务器" };
     }
   },
 
@@ -58,7 +58,6 @@ export const ApiService = {
       });
       return res.ok;
     } catch (e) {
-      console.error("Cloud upload failed");
       return false;
     }
   },
