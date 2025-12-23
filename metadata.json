@@ -1,5 +1,5 @@
 {
-  "name": "会员码自助领取系统",
+  "name": "member-code-portal",
   "description": "一个专业的会员码批量上传与自助分发工具，支持每人限领一次逻辑，并集成了 AI 辅助活动文案生成。",
   "requestFramePermissions": []
 }
