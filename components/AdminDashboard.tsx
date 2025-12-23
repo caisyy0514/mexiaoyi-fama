@@ -11,39 +11,9 @@ interface AdminDashboardProps {
   onReset: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  codes, 
-  claims, 
-  config, 
-  setConfig, 
-  onAddCodes, 
-  onReset 
-}) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ codes, claims, config, setConfig, onAddCodes, onReset }) => {
   const [rawInput, setRawInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleTextSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const lines = rawInput.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length > 0) {
-      onAddCodes(lines);
-      setRawInput('');
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-      onAddCodes(lines);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
-  };
 
   const handleQRUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,34 +24,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 600; // 稍微调大一点点保证清晰度
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          }
-        } else {
-          if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
+        const SIZE = 300; // 降低分辨率，扫码足够清晰且体积极小
+        canvas.width = SIZE;
+        canvas.height = SIZE;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          // 重要修复：填充白色背景，防止透明 PNG 变黑
           ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
+          ctx.fillRect(0, 0, SIZE, SIZE);
+          // 等比居中缩放
+          const ratio = Math.min(SIZE / img.width, SIZE / img.height);
+          const nw = img.width * ratio;
+          const nh = img.height * ratio;
+          ctx.drawImage(img, (SIZE - nw) / 2, (SIZE - nh) / 2, nw, nh);
           
-          // 使用 0.9 质量的 JPEG，体积小且兼容性好
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.9);
-          setConfig({ ...config, qrCode: compressedBase64 });
+          // 极致体积优化：JPEG 0.7 质量
+          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          setConfig({ ...config, qrCode: base64 });
         }
       };
       img.src = event.target?.result as string;
@@ -89,163 +47,70 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const exportClaims = () => {
-    if (claims.length === 0) return alert("暂无数据可导出");
-    const headers = "\ufeff用户标识,会员码,领取时间\n"; // 添加 BOM 解决 Excel 中文乱码
-    const csvContent = claims.map(c => `${c.userId},${c.code},${new Date(c.timestamp).toLocaleString()}`).join("\n");
-    const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `领取记录_${new Date().toLocaleDateString()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const unclaimedCount = codes.filter(c => !c.isClaimed).length;
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">管理后台</h1>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => window.location.hash = '#/'}
-            className="px-4 py-2 bg-white border rounded-lg text-sm hover:bg-gray-50 transition-colors"
-          >
-            返回门户
-          </button>
-          <button 
-            onClick={exportClaims}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            导出 CSV 记录
-          </button>
-        </div>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center">
+        <h1 className="text-xl font-black text-gray-800 tracking-tight">管理中心 <span className="text-xs font-normal text-gray-400 ml-2">v2.0 存储增强版</span></h1>
+        <button onClick={() => window.location.hash = '#/'} className="px-4 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">预览门户</button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
-          <section className="bg-white p-6 rounded-2xl border shadow-sm">
-            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <span className="text-indigo-500">📊</span> 实时状态
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 p-4 rounded-xl">
-                <p className="text-xs text-gray-500 font-medium">总库存</p>
-                <p className="text-2xl font-bold">{codes.length}</p>
-              </div>
-              <div className="bg-green-50 p-4 rounded-xl">
-                <p className="text-xs text-green-600 font-medium">已发出</p>
-                <p className="text-2xl font-bold text-green-700">{claims.length}</p>
-              </div>
-            </div>
-            <p className="mt-4 text-xs text-gray-400">剩余可用：{unclaimedCount}</p>
-            <button 
-              onClick={onReset}
-              className="mt-6 w-full py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-            >
-              清空系统所有数据
-            </button>
-          </section>
-
-          <section className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
-            <h2 className="text-lg font-bold mb-2">活动配置</h2>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">活动名称</label>
+          <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <h2 className="font-bold text-gray-700 mb-4">核心配置</h2>
+            <div className="space-y-4">
               <input 
-                type="text" 
+                className="w-full p-3 bg-gray-50 rounded-xl text-sm border-2 border-transparent focus:border-indigo-500 outline-none"
+                placeholder="活动标题"
                 value={config.name}
-                onChange={(e) => setConfig({ ...config, name: e.target.value })}
-                className="w-full p-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-indigo-100"
+                onChange={e => setConfig({...config, name: e.target.value})}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">兑换说明 (支持换行)</label>
               <textarea 
+                className="w-full p-3 bg-gray-50 rounded-xl text-sm border-2 border-transparent focus:border-indigo-500 outline-none h-32"
+                placeholder="兑换说明..."
                 value={config.instructions}
-                onChange={(e) => setConfig({ ...config, instructions: e.target.value })}
-                rows={5}
-                className="w-full p-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
+                onChange={e => setConfig({...config, instructions: e.target.value})}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">自定义二维码图片</label>
-              <div className="flex items-center gap-4 mt-2">
-                {config.qrCode && (
-                  <img src={config.qrCode} className="w-12 h-12 rounded border p-1 object-contain bg-white" alt="Preview" />
+              <div className="p-4 border-2 border-dashed border-gray-200 rounded-2xl flex items-center gap-4">
+                {config.qrCode ? (
+                   <img src={config.qrCode} className="w-16 h-16 rounded-lg shadow-sm border" alt="QR" />
+                ) : (
+                  <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-[10px] text-gray-400">无图片</div>
                 )}
-                <label className="flex-grow cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-2 text-center text-xs text-gray-500 hover:bg-gray-100">
-                  <span>点击上传 (已自动纠正透明背景)</span>
+                <label className="flex-grow text-center py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-100 transition-all">
+                  更新二维码
                   <input type="file" accept="image/*" onChange={handleQRUpload} className="hidden" />
                 </label>
               </div>
             </div>
           </section>
-        </div>
 
-        <div className="lg:col-span-2 space-y-6">
-          <section className="bg-white p-6 rounded-2xl border shadow-sm">
-            <h2 className="text-lg font-bold mb-4">批量导入会员码 (限15,000条)</h2>
-            <div className="flex flex-col gap-4">
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl hover:bg-gray-100 transition-colors flex flex-col items-center justify-center gap-1"
-                >
-                  <span className="text-gray-600 font-semibold text-sm">选择本地文件 (XLSX/CSV/TXT)</span>
-                  <span className="text-gray-400 text-xs">自动按行识别每一个码</span>
-                  <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.txt" onChange={handleFileUpload} className="hidden" />
-                </button>
-              </div>
-              
-              <div className="relative">
-                <textarea 
-                  className="w-full h-32 p-4 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 font-mono text-xs"
-                  placeholder="手动粘贴：每行一个码..."
-                  value={rawInput}
-                  onChange={(e) => setRawInput(e.target.value)}
-                />
-                <button 
-                  onClick={handleTextSubmit}
-                  className="absolute bottom-4 right-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700 shadow-lg"
-                >
-                  确认导入
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white p-6 rounded-2xl border shadow-sm overflow-hidden">
-            <h2 className="text-lg font-bold mb-4">领取历史 (最近100条)</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b text-gray-400">
-                    <th className="pb-3 font-semibold uppercase">用户标识</th>
-                    <th className="pb-3 font-semibold uppercase">会员码</th>
-                    <th className="pb-3 font-semibold uppercase">领取时间</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {claims.length === 0 ? (
-                    <tr><td colSpan={3} className="py-10 text-center text-gray-400">暂无任何领取数据</td></tr>
-                  ) : (
-                    claims.slice(-100).reverse().map((claim, idx) => (
-                      <tr key={idx} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
-                        <td className="py-3 font-medium text-gray-800">{claim.userId}</td>
-                        <td className="py-3 font-mono text-indigo-600 font-semibold">{claim.code}</td>
-                        <td className="py-3 text-gray-400">{new Date(claim.timestamp).toLocaleString()}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm text-center">
+             <div className="text-3xl font-black text-gray-800">{codes.length}</div>
+             <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">总库存量</div>
+             <button onClick={onReset} className="mt-6 text-xs text-red-400 hover:text-red-600 font-bold transition-all">危险：重置所有系统数据</button>
           </section>
         </div>
+
+        <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col">
+          <h2 className="font-bold text-gray-700 mb-4">导入会员码</h2>
+          <textarea 
+            className="flex-grow w-full p-4 bg-gray-50 rounded-2xl text-xs font-mono border-2 border-transparent focus:border-indigo-500 outline-none mb-4"
+            placeholder="每行一个码..."
+            value={rawInput}
+            onChange={e => setRawInput(e.target.value)}
+          />
+          <button 
+            onClick={() => {
+              const lines = rawInput.split('\n').filter(l => l.trim());
+              onAddCodes(lines);
+              setRawInput('');
+            }}
+            className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-lg shadow-gray-200"
+          >
+            确认追加导入
+          </button>
+        </section>
       </div>
     </div>
   );

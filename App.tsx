@@ -4,9 +4,9 @@ import { ViewMode, MembershipCode, ClaimRecord, CampaignConfig } from './types';
 import AdminDashboard from './components/AdminDashboard';
 import UserPortal from './components/UserPortal';
 
-const STORAGE_KEY_CODES = 'membercode_codes';
-const STORAGE_KEY_CLAIMS = 'membercode_claims';
-const STORAGE_KEY_CONFIG = 'membercode_config';
+const STORAGE_KEY_CODES = 'm_c_v2'; // 使用新 Key 避免旧数据冲突
+const STORAGE_KEY_CLAIMS = 'm_cl_v2';
+const STORAGE_KEY_CONFIG = 'm_cfg_v2';
 const ADMIN_TOKEN = 'admin4624199';
 
 const App: React.FC = () => {
@@ -20,110 +20,98 @@ const App: React.FC = () => {
     qrCode: '' 
   });
 
-  // 增强的路由匹配逻辑
   useEffect(() => {
     const checkRoute = () => {
       const hash = window.location.hash;
       const path = window.location.pathname;
-      
-      // 检查 Hash 模式: #/admin4624199
-      const isHashMatch = hash === `#/${ADMIN_TOKEN}` || hash === `#${ADMIN_TOKEN}`;
-      // 检查 Path 模式: /admin4624199
-      const isPathMatch = path.endsWith(`/${ADMIN_TOKEN}`);
-
-      if (isHashMatch || isPathMatch) {
+      if (hash.includes(ADMIN_TOKEN) || path.endsWith(ADMIN_TOKEN)) {
         setView(ViewMode.ADMIN);
       } else {
         setView(ViewMode.USER);
       }
     };
-
     window.addEventListener('hashchange', checkRoute);
-    window.addEventListener('popstate', checkRoute);
-    checkRoute(); // 初始化执行
-
-    return () => {
-      window.removeEventListener('hashchange', checkRoute);
-      window.removeEventListener('popstate', checkRoute);
-    };
+    checkRoute();
+    return () => window.removeEventListener('hashchange', checkRoute);
   }, []);
 
-  // 持久化逻辑
+  // 加载逻辑
   useEffect(() => {
     try {
-      const savedCodes = localStorage.getItem(STORAGE_KEY_CODES);
+      const savedCodesRaw = localStorage.getItem(STORAGE_KEY_CODES);
       const savedClaims = localStorage.getItem(STORAGE_KEY_CLAIMS);
       const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
 
-      if (savedCodes) setCodes(JSON.parse(savedCodes));
+      if (savedCodesRaw) {
+        // 极致压缩还原：ID|CODE|CLAIMED|BY|AT
+        const parsedCodes: MembershipCode[] = savedCodesRaw.split(';;').map(row => {
+          const [id, code, isClaimed, claimedBy, claimedAt] = row.split('|');
+          return { id, code, isClaimed: isClaimed === '1', claimedBy, claimedAt };
+        });
+        setCodes(parsedCodes);
+      }
       if (savedClaims) setClaims(JSON.parse(savedClaims));
       if (savedConfig) setConfig(JSON.parse(savedConfig));
     } catch (e) {
-      console.error("Failed to load state:", e);
+      console.error("Load failed", e);
     }
   }, []);
 
+  // 独立保存 Config，确保二维码安全性
+  useEffect(() => {
+    if (config.name) {
+      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
+    }
+  }, [config]);
+
+  // 分离保存大数据量内容
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_CODES, JSON.stringify(codes));
-      localStorage.setItem(STORAGE_KEY_CLAIMS, JSON.stringify(claims));
-      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
+      if (codes.length > 0) {
+        const compressed = codes.map(c => 
+          `${c.id}|${c.code}|${c.isClaimed ? '1' : '0'}|${c.claimedBy || ''}|${c.claimedAt || ''}`
+        ).join(';;');
+        localStorage.setItem(STORAGE_KEY_CODES, compressed);
+      }
+      if (claims.length > 0) {
+        localStorage.setItem(STORAGE_KEY_CLAIMS, JSON.stringify(claims));
+      }
     } catch (e) {
-      console.warn("Storage quota limit reached.");
+      console.warn("Storage Quota Exceeded! Some data might not be saved.");
     }
-  }, [codes, claims, config]);
+  }, [codes, claims]);
 
   const addCodes = (rawCodes: string[]) => {
-    const limit = 15000;
-    if (codes.length + rawCodes.length > limit) {
-      alert(`超出限制！`);
-      return;
-    }
-
     const newCodes: MembershipCode[] = rawCodes.map(c => ({
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substr(2, 5),
       code: c.trim(),
       isClaimed: false
     })).filter(c => c.code.length > 0);
-    
     setCodes(prev => [...prev, ...newCodes]);
-    alert(`成功导入 ${newCodes.length} 条记录。`);
   };
 
   const handleClaim = (userId: string): string | null => {
-    const existingClaim = claims.find(c => c.userId === userId);
-    if (existingClaim) return existingClaim.code;
+    const existing = claims.find(c => c.userId === userId);
+    if (existing) return existing.code;
 
-    const availableIndex = codes.findIndex(c => !c.isClaimed);
-    if (availableIndex === -1) return null;
+    const idx = codes.findIndex(c => !c.isClaimed);
+    if (idx === -1) return null;
 
-    const codeToClaim = codes[availableIndex];
-    const newClaim: ClaimRecord = {
-      userId,
-      codeId: codeToClaim.id,
-      code: codeToClaim.code,
-      timestamp: new Date().toISOString()
-    };
-
-    const updatedCodes = [...codes];
-    updatedCodes[availableIndex] = { 
-      ...codeToClaim, 
-      isClaimed: true, 
-      claimedBy: userId, 
-      claimedAt: newClaim.timestamp 
-    };
-
-    setCodes(updatedCodes);
+    const target = codes[idx];
+    const newClaim = { userId, codeId: target.id, code: target.code, timestamp: new Date().toISOString() };
+    
+    const updated = [...codes];
+    updated[idx] = { ...target, isClaimed: true, claimedBy: userId, claimedAt: newClaim.timestamp };
+    
+    setCodes(updated);
     setClaims(prev => [...prev, newClaim]);
-    return codeToClaim.code;
+    return target.code;
   };
 
   const resetAll = () => {
-    if (window.confirm("确定要清空所有数据吗？")) {
-      setCodes([]);
-      setClaims([]);
-      localStorage.removeItem(STORAGE_KEY_CODES);
-      localStorage.removeItem(STORAGE_KEY_CLAIMS);
+    if (confirm("确定重置？")) {
+      localStorage.clear();
+      location.reload();
     }
   };
 
@@ -131,24 +119,13 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#f9fafb]">
       <main className="flex-grow container mx-auto px-4 py-8">
         {view === ViewMode.ADMIN ? (
-          <AdminDashboard 
-            codes={codes} 
-            claims={claims} 
-            config={config}
-            setConfig={setConfig}
-            onAddCodes={addCodes}
-            onReset={resetAll}
-          />
+          <AdminDashboard codes={codes} claims={claims} config={config} setConfig={setConfig} onAddCodes={addCodes} onReset={resetAll} />
         ) : (
-          <UserPortal 
-            config={config}
-            onClaim={handleClaim}
-            claims={claims}
-          />
+          <UserPortal config={config} onClaim={handleClaim} claims={claims} />
         )}
       </main>
-      <footer className="py-6 text-center text-gray-400 text-xs">
-        &copy; {new Date().getFullYear()} 会员码管理系统 | {view === ViewMode.ADMIN ? '🔐 安全控制台' : '会员服务中心'}
+      <footer className="py-6 text-center text-gray-400 text-[10px] font-medium uppercase tracking-widest">
+        &copy; 2025 会员码管理系统 | 安全存储引擎 v2
       </footer>
     </div>
   );
