@@ -10,32 +10,35 @@ const ADMIN_TOKEN = 'admin4624199';
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.USER);
   const [config, setConfig] = useState<CampaignConfig>({
-    name: '云端权益领取',
-    description: '正在加载最新的活动信息...',
-    instructions: '1. 请确保您的网络已连接。\n2. 输入正确标识后领取。',
+    name: '会员权益分发中心',
+    description: '欢迎使用自助领取系统，正在同步最新的活动配置...',
+    instructions: '1. 请确保您的网络连接正常。\n2. 输入正确的用户标识。\n3. 点击领取并复制兑换码。',
     qrCode: '' 
   });
   
+  // 默认假设是在线状态，提升用户首屏感知
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>({ connected: true, syncing: true });
 
   const syncFromCloud = async () => {
     try {
       setCloudStatus(prev => ({ ...prev, syncing: true }));
-      const remoteConfig = await ApiService.fetchConfig();
-      const stats = await ApiService.fetchStats();
+      const [remoteConfig, stats] = await Promise.all([
+        ApiService.fetchConfig(),
+        ApiService.fetchStats()
+      ]);
       
       if (remoteConfig) {
         setConfig(remoteConfig);
       }
       
-      // 根据后端返回的 stats.cloud 判定连接模式
+      const isCloud = stats && stats.cloud;
       setCloudStatus({ 
         connected: !!stats, 
         syncing: false, 
-        error: (stats && !stats.cloud) ? "运行于本地内存模式 (Redis 未连接)" : undefined 
+        error: !isCloud ? "Running in Offline Mode (Redis not detected)" : undefined 
       });
     } catch (err) {
-      setCloudStatus({ connected: false, syncing: false, error: "无法同步云端数据" });
+      setCloudStatus({ connected: false, syncing: false, error: "Cloud sync failed. Service may be unstable." });
     }
   };
 
@@ -61,38 +64,47 @@ const App: React.FC = () => {
   };
 
   const handleReset = async () => {
-    if (confirm("警告：此操作将清空【数据库】中所有会员码和领取记录，确认吗？")) {
+    if (confirm("警告：此操作将清空云端所有数据。确认吗？")) {
       const success = await ApiService.resetCloud();
       if (success) {
-        alert("系统已重置");
+        alert("云端已重置");
         location.hash = '#/';
         location.reload();
-      } else {
-        alert("重置失败，请检查后端状态");
       }
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f0f2f5]">
-      <div className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-center transition-all duration-700 ${
+    <div className="min-h-screen flex flex-col bg-[#f0f2f5] selection:bg-blue-100">
+      {/* 顶部状态条：在线/离线反馈 */}
+      <div className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-center transition-all duration-1000 ${
         cloudStatus.syncing 
           ? 'bg-blue-600 text-white' 
           : cloudStatus.error 
-            ? 'bg-amber-500 text-white'
-            : 'bg-gray-900 text-gray-400'
+            ? 'bg-amber-500 text-white shadow-inner'
+            : 'bg-emerald-600 text-white shadow-lg'
       }`}>
         <div className="flex items-center justify-center gap-2">
-          {cloudStatus.syncing && <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>}
+          {cloudStatus.syncing ? (
+            <span className="flex gap-1">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce [animation-delay:0.2s]"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce [animation-delay:0.4s]"></span>
+            </span>
+          ) : !cloudStatus.error ? (
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : null}
           {cloudStatus.syncing 
-            ? 'Synchronizing with Engine...' 
+            ? 'Establishing Secure Connection...' 
             : cloudStatus.error 
               ? cloudStatus.error
-              : 'Protocol Secure & Data Cloud-Synced'}
+              : 'Global Distribution Protocol Active'}
         </div>
       </div>
 
-      <main className="flex-grow container mx-auto px-4 py-8 max-w-5xl">
+      <main className="flex-grow container mx-auto px-4 py-8 max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-1000">
         {view === ViewMode.ADMIN ? (
           <AdminDashboard 
             config={config} 
@@ -106,9 +118,9 @@ const App: React.FC = () => {
         )}
       </main>
       
-      <footer className="py-8 text-center text-gray-300">
-        <div className="text-[10px] font-black uppercase tracking-[0.4em]">
-          Secure Distribution Protocol v3.3.0 (Cloud-Resilient Edition)
+      <footer className="py-12 text-center text-gray-400">
+        <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40 hover:opacity-100 transition-opacity">
+          &copy; 2024 Membership Engine • Cloud Native Distribution
         </div>
       </footer>
     </div>

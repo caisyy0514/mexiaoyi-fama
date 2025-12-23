@@ -11,7 +11,6 @@ const app = express();
 const port = process.env.PORT || 8080;
 
 // --- 实时转译中间件 ---
-// 处理浏览器请求的 .tsx 和 .ts 文件，将其转译为 JS
 app.get(/\.(tsx|ts)$/, (req, res, next) => {
   const filePath = path.join(__dirname, req.path);
   if (fs.existsSync(filePath)) {
@@ -19,7 +18,7 @@ app.get(/\.(tsx|ts)$/, (req, res, next) => {
       const rawContent = fs.readFileSync(filePath, 'utf-8');
       const { code } = transform(rawContent, {
         transforms: ['typescript', 'jsx'],
-        jsxRuntime: 'classic', // 适配简单 ESM 环境
+        jsxRuntime: 'classic',
       });
       res.set('Content-Type', 'application/javascript');
       return res.send(code);
@@ -31,8 +30,13 @@ app.get(/\.(tsx|ts)$/, (req, res, next) => {
   next();
 });
 
-// --- Redis 连接与容错处理 ---
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+// --- 增强型 Redis 连接逻辑 ---
+// 自动适配多种云环境的变量名
+const redisConfig = {
+  url: process.env.REDIS_URL || (process.env.REDISHOST ? `redis://${process.env.REDISHOST}:${process.env.REDISPORT || 6379}` : null) || 'redis://localhost:6379',
+  maxRetries: 2
+};
+
 let redis;
 let isRedisReady = false;
 
@@ -42,42 +46,45 @@ const memoryStore = {
   claims: new Map()
 };
 
-try {
-  redis = new Redis(redisUrl, {
-    maxRetriesPerRequest: 1,
-    retryStrategy: (times) => {
-      if (times > 2) return null; // 快速放弃，切换到内存模式
-      return 1000;
-    },
-    // 抑制 AggregateError 报错
-    reconnectOnError: () => false
-  });
+const connectRedis = () => {
+  try {
+    redis = new Redis(redisConfig.url, {
+      maxRetriesPerRequest: 1,
+      retryStrategy: (times) => {
+        if (times > redisConfig.maxRetries) {
+          console.log(`[Redis] Connection timed out after ${times} attempts. Priority: Memory Mode.`);
+          return null; 
+        }
+        return 2000;
+      },
+      reconnectOnError: () => false
+    });
 
-  redis.on('error', (err) => {
-    // 简洁化报错
-    if (err.code === 'ECONNREFUSED') {
-      console.log(`[Redis] Connection refused at ${redisUrl}. Falling back to Memory Mode.`);
-    } else {
-      console.error('[Redis] Error:', err.message || err);
-    }
-    isRedisReady = false;
-  });
+    redis.on('error', (err) => {
+      if (err.code === 'ECONNREFUSED') {
+        console.log(`[Redis] Standby: Could not connect to ${redisConfig.url}. Operational in Local Mode.`);
+      } else {
+        console.error('[Redis] System Error:', err.message || err);
+      }
+      isRedisReady = false;
+    });
 
-  redis.on('connect', () => {
-    console.log('[Redis] Status: CONNECTED');
-    isRedisReady = true;
-  });
-} catch (e) {
-  console.log('[Redis] Initialization skipped, using Memory Mode.');
-}
+    redis.on('connect', () => {
+      console.log(`[Redis] Cloud Engine Activated: Connected to ${redisConfig.url.split('@').pop()}`);
+      isRedisReady = true;
+    });
+  } catch (e) {
+    console.log('[Redis] Driver initialization failed. Using In-memory persistence.');
+  }
+};
+
+connectRedis();
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
-
-// 静态资源服务（常规文件）
 app.use(express.static(__dirname));
 
-// --- API 实现 ---
+// --- API 路由 ---
 app.get('/api/config', async (req, res) => {
   try {
     let data = isRedisReady ? await redis.get('m_portal:config') : memoryStore.config;
@@ -89,16 +96,22 @@ app.post('/api/config', async (req, res) => {
   try {
     if (isRedisReady) await redis.set('m_portal:config', JSON.stringify(req.body));
     else memoryStore.config = req.body;
-    res.json({ success: true });
+    res.json({ success: true, mode: isRedisReady ? 'cloud' : 'local' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/codes/upload', async (req, res) => {
   const { codes } = req.body;
   try {
-    if (isRedisReady) await redis.sadd('m_portal:codes:available', ...codes);
-    else codes.forEach(c => memoryStore.codes.add(c));
-    res.json({ success: true });
+    if (isRedisReady) {
+      // 批量写入，优化性能
+      const pipeline = redis.pipeline();
+      pipeline.sadd('m_portal:codes:available', ...codes);
+      await pipeline.exec();
+    } else {
+      codes.forEach(c => memoryStore.codes.add(c));
+    }
+    res.json({ success: true, count: codes.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -145,12 +158,11 @@ app.post('/api/reset', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// SPA 路由
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(port, () => {
-  console.log(`\n🚀 Portal running at: http://localhost:${port}`);
-  console.log(`📦 Persistence: ${isRedisReady ? 'Redis Cloud' : 'In-Memory Fallback'}\n`);
+  console.log(`\n✅ SERVICE ONLINE: http://localhost:${port}`);
+  console.log(`📡 CLOUD_MODE: ${isRedisReady ? 'ACTIVE' : 'READY (Local Persistence)'}\n`);
 });
