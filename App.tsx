@@ -16,14 +16,13 @@ const App: React.FC = () => {
     name: '家小医会员兑换活动',
     description: '领取您的专属兑换码，即刻开启家小医会员权益。',
     instructions: '1.输入您的唯一标识（邮箱或手机号）。\n2.点击领取并复制兑换码。\n3.搜索「家小医会员版」微信小程序或长按识别下图进入小程序，输入兑换码即可激活权益。',
-    qrCode: '' // 默认空，UserPortal 会显示 fallback
+    qrCode: '' 
   });
 
   // 处理路由 (基于 Hash)
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
-      // 更新为用户指定的特定后台地址
       if (hash === '#/admin4624199') {
         setView(ViewMode.ADMIN);
       } else {
@@ -32,19 +31,25 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // 初始化调用
+    handleHashChange(); 
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // 持久化逻辑
+  // 持久化逻辑 - 增加错误捕获
   useEffect(() => {
-    const savedCodes = localStorage.getItem(STORAGE_KEY_CODES);
-    const savedClaims = localStorage.getItem(STORAGE_KEY_CLAIMS);
-    const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
+    try {
+      const savedCodes = localStorage.getItem(STORAGE_KEY_CODES);
+      const savedClaims = localStorage.getItem(STORAGE_KEY_CLAIMS);
+      const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
 
-    if (savedCodes) setCodes(JSON.parse(savedCodes));
-    if (savedClaims) setClaims(JSON.parse(savedClaims));
-    if (savedConfig) setConfig(JSON.parse(savedConfig));
+      if (savedCodes) setCodes(JSON.parse(savedCodes));
+      if (savedClaims) setClaims(JSON.parse(savedClaims));
+      if (savedConfig) setConfig(JSON.parse(savedConfig));
+    } catch (e) {
+      console.error("Failed to load state from localStorage:", e);
+      // 如果解析失败，清除损坏的数据
+      localStorage.clear();
+    }
   }, []);
 
   useEffect(() => {
@@ -53,7 +58,7 @@ const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY_CLAIMS, JSON.stringify(claims));
       localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
     } catch (e) {
-      console.warn("Storage quota exceeded, state not saved fully.");
+      console.warn("Storage quota exceeded or failed to save.");
     }
   }, [codes, claims, config]);
 
@@ -132,7 +137,7 @@ const App: React.FC = () => {
         )}
       </main>
       <footer className="py-6 text-center text-gray-400 text-xs">
-        &copy; {new Date().getFullYear()} 会员码管理系统 | {view === ViewMode.ADMIN ? '安全管理模式' : '用户模式'}
+        &copy; {new Date().getFullYear()} 会员码管理系统 | {view === ViewMode.ADMIN ? '管理中心' : '领取中心'}
       </footer>
     </div>
   );
