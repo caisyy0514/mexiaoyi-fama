@@ -18,10 +18,17 @@ export interface CampaignConfig {
   name: string;
   description: string;
   instructions: string;
-  qrCode?: string; // Base64 字符串
+  qrCode?: string; 
+  lastUpdated?: string;
 }
 
 export enum ViewMode {
   USER = 'USER',
   ADMIN = 'ADMIN'
+}
+
+export interface CloudStatus {
+  connected: boolean;
+  syncing: boolean;
+  error?: string;
 }
