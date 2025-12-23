@@ -10,14 +10,15 @@ const ADMIN_TOKEN = 'admin4624199';
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.USER);
   const [config, setConfig] = useState<CampaignConfig>({
-    name: '正在加载云端活动...',
-    description: '请稍候，系统正在从云端同步最新配置。',
-    instructions: '1. 请确保网络连接正常。\n2. 输入您的标识即可领取。',
+    name: '云端权益领取',
+    description: '正在同步活动信息...',
+    instructions: '1. 请确保您的网络已连接。\n2. 输入正确标识后领取。',
     qrCode: '' 
   });
-  const [cloudStatus, setCloudStatus] = useState<CloudStatus>({ connected: false, syncing: true });
+  
+  // 默认状态设置为 connected: true, syncing: true，体现“默认在线”
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>({ connected: true, syncing: true });
 
-  // 自动同步逻辑
   const syncFromCloud = async () => {
     setCloudStatus(prev => ({ ...prev, syncing: true }));
     const remoteConfig = await ApiService.fetchConfig();
@@ -25,7 +26,8 @@ const App: React.FC = () => {
       setConfig(remoteConfig);
       setCloudStatus({ connected: true, syncing: false });
     } else {
-      setCloudStatus({ connected: false, syncing: false, error: "无法连接到云端，正在使用本地缓存" });
+      // 只有在明确失败后才标记为未连接
+      setCloudStatus({ connected: false, syncing: false, error: "云端连接不稳定，已切换至本地缓存" });
     }
   };
 
@@ -51,17 +53,31 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (confirm("确定清除所有数据？云端数据也将同步重置。")) {
+    if (confirm("警告：此操作将清空本地所有缓存及配置，确认吗？")) {
       localStorage.clear();
+      location.hash = '#/';
       location.reload();
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f0f2f5]">
-      {/* 云端状态条 */}
-      <div className={`px-4 py-1 text-[10px] font-bold text-center transition-all ${cloudStatus.syncing ? 'bg-blue-500 text-white' : cloudStatus.connected ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
-        {cloudStatus.syncing ? '正在与云端同步...' : cloudStatus.connected ? '● 云端已连接' : '○ 离线模式 (使用本地缓存)'}
+      {/* 优化的云端指示条：更专业、更隐蔽 */}
+      <div className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-center transition-all duration-700 ${
+        cloudStatus.syncing 
+          ? 'bg-blue-600 text-white' 
+          : cloudStatus.connected 
+            ? 'bg-gray-900 text-gray-400' 
+            : 'bg-orange-500 text-white'
+      }`}>
+        <div className="flex items-center justify-center gap-2">
+          {cloudStatus.syncing && <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>}
+          {cloudStatus.syncing 
+            ? 'Synchronizing with Cloud Engine...' 
+            : cloudStatus.connected 
+              ? 'Cloud Infrastructure Connected' 
+              : 'Connection Error: Local Fallback Active'}
+        </div>
       </div>
 
       <main className="flex-grow container mx-auto px-4 py-8 max-w-5xl">
@@ -78,9 +94,9 @@ const App: React.FC = () => {
         )}
       </main>
       
-      <footer className="py-8 text-center text-gray-400">
-        <div className="text-[11px] font-black uppercase tracking-[0.3em]">
-          Powered by Cloud Engine v3.0
+      <footer className="py-8 text-center text-gray-300">
+        <div className="text-[10px] font-black uppercase tracking-[0.4em]">
+          Secure Distribution Protocol v3.1
         </div>
       </footer>
     </div>
